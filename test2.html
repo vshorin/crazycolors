@@ -19,6 +19,12 @@
             border: 1px solid black;  
         }
     </style>
+    <script>
+        function downloadCanvas() {
+            document.getElementById("downloader").download = "image.png";
+            document.getElementById("downloader").href = document.getElementById("pic").toDataURL("image/png").replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+        }
+    </script>
 </head>
 <body>
     <canvas id="pic" width="500" height="500"></canvas>
@@ -34,6 +40,7 @@
         </div>
     </div>
     <pre id="stats"></pre>
+    <a href="#" id="downloader" onclick="downloadCanvas()" download="image.png">Save to PNG</a>
     <script>
 
 // regions = add each new point to parent region; unite regions of same type
@@ -45,6 +52,7 @@
 // starting position tuning
 
         var iLimit = 0;
+        var totalLimit = 500;
         var mode = "weighted";
         var pic = document.getElementById("pic").getContext('2d');
         var h = pic.canvas.height;
@@ -271,6 +279,11 @@
                 document.getElementById("stats").innerHTML = `Finished at iteration ${it}. Process took ${Date.now() - startTime.getTime()}ms`;
                 return;
             }
+            if (it >= totalLimit) {
+                console.log("hit total limit. activePoints left:", activePoints);
+                document.getElementById("stats").innerHTML = `Hit total limit at iteration ${it}. Process took ${Date.now() - startTime.getTime()}ms`;
+                return;
+            }
             document.getElementById("stats").innerHTML = "Running iteration " + it;
             console.log("iteration " + it++);
             for (var ap of Object.keys(activePoints)) {
@@ -279,14 +292,14 @@
             requestAnimationFrame(update);
         }
 
-        var startPoints = [
-            {x: 50, y: 50, pType: "green", reg: "g"},
-            {x: 450, y: 50, pType: "blue", reg: "b"},
-            {x: 50, y: 450, pType: "red", reg: "r"},
-            {x: 450, y: 450, pType: "yellow", reg: "y"}
-        ];
-        fillStartPoints(startPoints);
-        // fillStartPoints(makeRandomPoints(8));
+        // var startPoints = [
+        //     {x: 50, y: 50, pType: "green", reg: "g"},
+        //     {x: 450, y: 50, pType: "blue", reg: "b"},
+        //     {x: 50, y: 450, pType: "red", reg: "r"},
+        //     {x: 450, y: 450, pType: "yellow", reg: "y"}
+        // ];
+        // fillStartPoints(startPoints);
+        fillStartPoints(makeRandomPoints(110));
         var startTime = new Date();
         update();
 
