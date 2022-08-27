@@ -36,22 +36,22 @@
             var ctx = document.getElementById("source_pic").getContext('2d');
             img.addEventListener("load", function () {
                 // https://stackoverflow.com/a/23105310
-                var canvas = ctx.canvas ;
-                var hRatio = canvas.width  / img.width    ;
-                var vRatio =  canvas.height / img.height  ;
-                var ratio  = Math.min ( hRatio, vRatio );
-                var centerShift_x = ( canvas.width - img.width*ratio ) / 2;
+                var canvas = ctx.canvas;
+                var hRatio = canvas.width / img.width;
+                var vRatio = canvas.height / img.height;
+                var ratio = Math.min(hRatio, vRatio);
+                var centerShift_x = (canvas.width - img.width * ratio) / 2;
                 // var centerShift_y = ( canvas.height - img.height*ratio ) / 2;  
-                ctx.clearRect(0,0,canvas.width, canvas.height);
-                sourceH = img.height*ratio;
-                sourceW = img.width*ratio;
-                ctx.drawImage(img, 0, 0, img.width, img.height, centerShift_x, 0, sourceW, sourceH); 
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sourceH = img.height * ratio;
+                sourceW = img.width * ratio;
+                ctx.drawImage(img, 0, 0, img.width, img.height, centerShift_x, 0, sourceW, sourceH);
             });
             img.setAttribute("src", blob);
         }
 
-        window.addEventListener('load', function() {
-            document.getElementById('uploader').addEventListener('change', function() {
+        window.addEventListener('load', function () {
+            document.getElementById('uploader').addEventListener('change', function () {
                 if (this.files && this.files[0]) {
                     if (this.files[0].type !== "image/jpeg" && this.files[0].type !== "image/png") {
                         return alert("Should provide jpeg or png file!");
@@ -91,7 +91,12 @@
     <pre id="stats"></pre>
     <a href="#" id="downloader" onclick="downloadCanvas()" download="image.png">Save to PNG</a>
     <hr />
-    <span>Upload image here: </span><input type="file" id="uploader"/>
+    <span>Upload image here: </span><input type="file" id="uploader" />
+    <br />
+    <label>
+        <input type="checkbox" id="random_source">
+        <span>Source image anarchy mode</span>
+    </label>
     <script>
 
         // regions = add each new point to parent region; unite regions of same type
@@ -354,14 +359,24 @@
         function makeSamplePoints(rate) {
             var sourcePic = document.getElementById('source_pic').getContext('2d');
             var points = [];
-            for (var i = 0; i < sourceH; i+=rate) {
-                for (var j = 0; j < sourceW; j+=rate) {
+            for (var i = 0; i < sourceH; i += rate) {
+                for (var j = 0; j < sourceW; j += rate) {
                     var pix = sourcePic.getImageData(j, i, 1, 1).data;
                     var pointName = `r${pix[0]}g${pix[1]}b${pix[2]}`;
-                    pTypes[pointName] = {
-                        color: `rgb(${pix[0]},${pix[1]},${pix[2]})`,
-                        speed: 1
-                    };
+
+                    if (document.querySelector('#random_source:checked')) {
+                        var mSetIndex = Math.floor((Math.random() * Object.keys(movementSets).length));
+                        pTypes[pointName] = {
+                            color: `rgb(${pix[0]},${pix[1]},${pix[2]})`,
+                            speed: 0.4 + Math.random() * 0.6,
+                            mSet: Object.keys(movementSets)[mSetIndex]
+                        };
+                    } else {
+                        pTypes[pointName] = {
+                            color: `rgb(${pix[0]},${pix[1]},${pix[2]})`,
+                            speed: 1
+                        };
+                    }
                     points.push({ x: j, y: i, reg: "r" + points.length, pType: pointName });
                 }
             }
@@ -381,13 +396,13 @@
             eH = h;
             eW = w;
             startTime = new Date();
-        // var startPoints = [
-        //     {x: 50, y: 50, pType: "green", reg: "g"},
-        //     {x: 450, y: 50, pType: "blue", reg: "b"},
-        //     {x: 50, y: 450, pType: "red", reg: "r"},
-        //     {x: 450, y: 450, pType: "yellow", reg: "y"}
-        // ];
-        // fillStartPoints(startPoints);
+            // var startPoints = [
+            //     {x: 50, y: 50, pType: "green", reg: "g"},
+            //     {x: 450, y: 50, pType: "blue", reg: "b"},
+            //     {x: 50, y: 450, pType: "red", reg: "r"},
+            //     {x: 450, y: 450, pType: "yellow", reg: "y"}
+            // ];
+            // fillStartPoints(startPoints);
             fillStartPoints(makeRandomPoints(110));
             update();
         }
