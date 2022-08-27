@@ -1,0 +1,292 @@
+<html>
+<head>
+    <style>
+        .div-table {
+            display: table;         
+            width: auto;         
+        }
+        .div-table-row {
+            display: table-row;
+            width: auto;
+            clear: both;
+        }
+        .div-table-col {
+            float: left;
+            display: table-column;         
+            width: 25px;         
+            height: 25px;
+            text-align: center;
+            border: 1px solid black;  
+        }
+    </style>
+</head>
+<body>
+    <canvas id="pic" width="500" height="500"></canvas>
+    <div class="div-table">
+        <div class="div-table-row">
+            <div class="div-table-col">0</div><div class="div-table-col">1</div><div class="div-table-col">2</div>
+        </div>
+        <div class="div-table-row">
+            <div class="div-table-col">7</div><div class="div-table-col">X</div><div class="div-table-col">3</div>
+        </div>
+        <div class="div-table-row">
+            <div class="div-table-col">6</div><div class="div-table-col">5</div><div class="div-table-col">4</div>
+        </div>
+    </div>
+    <script>
+
+// regions = add each new point to parent region; unite regions of same type
+// speed = possibility for active points to spawn children points
+// attraction = how much other points in vicinity influence the child point location
+// preferred direction = increases chance of exapnding straight or diagonally
+// pushiness = possibility to overwrite other points (in the same iteration?)
+// weights of all those points above
+// starting position tuning
+
+        var iLimit = 0;
+        var mode = "weighted";
+        var pic = document.getElementById("pic").getContext('2d');
+        var h = pic.canvas.height;
+        var w = pic.canvas.width;
+        var it = 0;
+        var activePoints = {}; // TODO: make an array instead of obj?
+        var around = [{x: -1, y: -1}, {x: 0, y: -1}, {x: 1, y: -1}, {x: 1, y: 0}, {x: 1, y: 1}, {x: 0, y: 1}, {x: -1, y: 1}, {x: -1, y: 0}];
+        var picMap = {};
+        var pTypes = {
+            green: {
+                color: "green",
+                speed: 0.5,
+                mSet: "up"
+            },
+            red: {
+                color: "red",
+                speed: 0.8,
+                mSet: "straight"
+            },
+            blue: {
+                color: "blue",
+                speed: 1
+            },
+            yellow: {
+                color: "yellow",
+                speed: 0.3,
+                mSet: "down"
+            },
+            black: {
+                color: "black",
+                speed: 1
+            },
+            orange: {
+                color: "orange",
+                speed: 0.7,
+                mSet: "diagonal"
+            },
+            teal: {
+                color: "teal",
+                speed: 0.3,
+                mSet: "left"
+            },
+            purple: {
+                color: "purple",
+                speed: 0.3,
+                mSet: "right"
+            },
+            grey: {
+                color: "grey",
+                speed: 0.4,
+                mSet: "diagonal"
+            }
+        };
+        var movementSets = {
+            // up: [1, 1, 1, 0.75, 0.5, 0.5, 0.5, 0.75],
+            // down: [0.5, 0.5, 0.5, 0.75, 1, 1, 1, 0.75],
+            // right: [0.5, 0.75, 1, 1, 1, 0.75, 0.5, 0.5],
+            // left: [1, 0.75, 0.5, 0.5, 0.5, 0.75, 1, 1],
+            // diagonal: [1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5],
+            // straight: [0.5, 1, 0.5, 1, 0.5, 1, 0.5, 1]
+            up: {
+                weights: [1, 1, 1, 0.5, 0.25, 0.25, 0.25, 0.5],
+                threshold: 0.2
+            },
+            down: {
+                weights: [0.25, 0.25, 0.25, 0.5, 1, 1, 1, 0.5],
+                threshold: 0.2
+            },
+            right: {
+                weights: [0.25, 0.5, 1, 1, 1, 0.5, 0.25, 0.25],
+                threshold: 0.2
+            },
+            left: {
+                weights: [1, 0.5, 0.25, 0.25, 0.25, 0.5, 1, 1],
+                threshold: 0.2
+            },
+            diagonal: {
+                weights: [1, 0.25, 1, 0.25, 1, 0.25, 1, 0.25],
+                threshold: 0.2,
+                inetrness: 0.25,
+                inetrnessPenalty: -0.5
+            },
+            straight: {
+                weights: [0, 1, 0, 1, 0, 1, 0, 1],
+                threshold: 0.4,
+                inetrness: 0.25,
+                inetrnessPenalty: -0.58
+            }
+        }
+
+        function fillStartPoints(points) {
+            console.log("filling starting points:", points);
+            for (var point of points) {
+                // pic.fillStyle = pTypes[point.pType].color;
+                pic.fillStyle = "black"; // TODO: revert
+                pic.fillRect(point.x, point.y, 1, 1);
+                picMap[point.x + "," + point.y] = point;
+                activePoints[point.x + "," + point.y] = point;
+            }
+        }
+
+        // draw({x: 0, y:1, t: "type1"})
+        function draw({x, y, pType, reg, pi}) {
+            var t = pTypes[pType];
+            if (!t) throw new Error("no type defined");
+            var newPoint;
+            if (mode === "weighted") {
+                newPoint = weightedNewPoint(arguments[0]);
+            } else {
+                newPoint = simpleNewPoint(arguments[0]);
+            }
+            if (!newPoint) {
+                delete activePoints[x + "," + y];
+                return;
+            }
+            if (!newPoint.pType) {
+                return;
+            }
+            pic.fillStyle = t.color;
+            pic.fillRect(newPoint.x, newPoint.y, 1, 1);
+            picMap[newPoint.x + "," + newPoint.y] = newPoint;
+            activePoints[newPoint.x + "," + newPoint.y] = newPoint;
+        }
+
+        // create a new point by randomly filling a nearby empty spot
+        function simpleNewPoint({x, y, pType, reg}) {
+            var possibleXY = [];
+            for (var a of around) {
+                var ax = x + a.x;
+                var ay = y + a.y;
+                if (ax >= 0 && ay >= 0 && ax < w && ay < h && !picMap[ax + "," + ay]) {
+                    possibleXY.push({x: ax, y: ay});
+                }
+            }
+            if (!possibleXY.length) {
+                return;
+            }
+            var where = Math.floor((Math.random()*possibleXY.length));
+            return {x: possibleXY[where].x, y: possibleXY[where].y, pType, reg}
+        }
+
+        function weightedNewPoint(point) {
+            // pass the speed test
+            var t = pTypes[point.pType];
+            if (Math.random() > t.speed) {
+                return {};
+            }
+            if (!t.mSet) {
+                return simpleNewPoint(arguments[0]);
+            }
+            return calcDirection(arguments[0], t.mSet);
+        }
+
+        function calcDirection({x, y, pType, reg, pi}, mSetName) {
+            // return Math.acos(2*x-1)/Math.PI;
+            var mSet = movementSets[mSetName];
+            if (!mSet) throw new Error("unknown movement set " + mSetName);
+            var possibleXY = [];
+            for (var i = 0; i < around.length; i++) {
+                var a = around[i];
+                var ax = x + a.x;
+                var ay = y + a.y;
+                if (ax >= 0 && ay >= 0 && ax < w && ay < h && !picMap[ax + "," + ay]) {
+                    possibleXY.push({x: ax, y: ay, i});
+                }
+            }
+            if (!possibleXY.length) {
+                return;
+            }
+            var randoms = [];
+            for (var p of possibleXY) {
+                var weight = mSet.weights[p.i];
+                if (mSet.inetrness && pi !== undefined) {
+                    if (p.i === pi) {
+                        weight += mSet.inetrness;
+                    } else if (mSet.inetrnessPenalty) {
+                        weight += mSet.inetrnessPenalty;
+                    }
+                }
+
+                randoms.push(Math.random()*weight);
+            }
+            var winner = randoms.reduce(
+                (previousValue, currentValue, currentIndex, array) => currentValue > randoms[previousValue] ? currentIndex : previousValue,
+                0
+            );
+            if (randoms[winner] <= mSet.threshold) {
+                return {};
+            }
+            console.log(`mSet ${mSetName}, winner ${possibleXY[winner].i} at ${randoms[winner]}`);
+            return {
+                x: possibleXY[winner].x,
+                y: possibleXY[winner].y,
+                pType,
+                reg,
+                pi: possibleXY[winner].i
+            };
+        }
+
+        function makeRandomPoints(amount) {
+            if (h*w <= amount) throw new Error("too many start points");
+            var points = [];
+            while (points.length < (amount - 1)) {
+                var rx = Math.floor((Math.random()*w));
+                var ry = Math.floor((Math.random()*h));
+                var found;
+                for (var i = 0; i < points.length; i++) {
+                    if (points[i].x === rx && points[i].y === ry) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    var ti = Math.floor((Math.random()*Object.keys(pTypes).length));
+                    points.push({x: rx, y: ry, reg: "r" + points.length, pType: Object.keys(pTypes)[ti]});
+                }
+            }
+            return points;
+        }
+
+        function update() {
+            if (!Object.keys(activePoints).length || (iLimit && it >= iLimit)) {
+                console.log("finished!");
+                return;
+            }
+            console.log("iteration " + it++);
+            for (var ap of Object.keys(activePoints)) {
+                draw(activePoints[ap]);
+            }
+            requestAnimationFrame(update);
+        }
+
+        var startPoints = [
+            {x: 50, y: 50, pType: "green", reg: "g"},
+            {x: 450, y: 50, pType: "blue", reg: "b"},
+            {x: 50, y: 450, pType: "red", reg: "r"},
+            {x: 450, y: 450, pType: "yellow", reg: "y"}
+        ];
+        fillStartPoints(startPoints);
+        // fillStartPoints(makeRandomPoints(8));
+
+        update();
+
+    </script>
+</body>
+</html>
