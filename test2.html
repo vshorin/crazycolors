@@ -1,55 +1,106 @@
 <html>
+
 <head>
     <style>
         .div-table {
-            display: table;         
-            width: auto;         
+            display: table;
+            width: auto;
         }
+
         .div-table-row {
             display: table-row;
             width: auto;
             clear: both;
         }
+
         .div-table-col {
             float: left;
-            display: table-column;         
-            width: 25px;         
+            display: table-column;
+            width: 25px;
             height: 25px;
             text-align: center;
-            border: 1px solid black;  
+            border: 1px solid black;
         }
     </style>
     <script>
+        var sourceBlob;
+        var sourceH, sourceW;
+
         function downloadCanvas() {
             document.getElementById("downloader").download = "image.png";
             document.getElementById("downloader").href = document.getElementById("pic").toDataURL("image/png").replace(/^data:image\/[^;]/, 'data:application/octet-stream');
         }
+
+        function drawSourceBlob(blob) {
+            var img = new window.Image();
+            var ctx = document.getElementById("source_pic").getContext('2d');
+            img.addEventListener("load", function () {
+                // https://stackoverflow.com/a/23105310
+                var canvas = ctx.canvas ;
+                var hRatio = canvas.width  / img.width    ;
+                var vRatio =  canvas.height / img.height  ;
+                var ratio  = Math.min ( hRatio, vRatio );
+                var centerShift_x = ( canvas.width - img.width*ratio ) / 2;
+                // var centerShift_y = ( canvas.height - img.height*ratio ) / 2;  
+                ctx.clearRect(0,0,canvas.width, canvas.height);
+                sourceH = img.height*ratio;
+                sourceW = img.width*ratio;
+                ctx.drawImage(img, 0, 0, img.width, img.height, centerShift_x, 0, sourceW, sourceH); 
+            });
+            img.setAttribute("src", blob);
+        }
+
+        window.addEventListener('load', function() {
+            document.getElementById('uploader').addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    if (this.files[0].type !== "image/jpeg" && this.files[0].type !== "image/png") {
+                        return alert("Should provide jpeg or png file!");
+                    }
+                    sourceBlob = this.files[0]; // TODO: delete this var
+                    console.log("sourceBlob:", sourceBlob);
+                    drawSourceBlob(URL.createObjectURL(this.files[0]));
+                }
+            });
+        });
     </script>
 </head>
+
 <body>
+    <button type="button" onclick="start()">Start</button>
+    <button type="button" onclick="startFromSource()">Start from source</button>
+    <hr />
     <canvas id="pic" width="500" height="500"></canvas>
+    <canvas id="source_pic" width="500" height="500"></canvas>
     <div class="div-table">
         <div class="div-table-row">
-            <div class="div-table-col">0</div><div class="div-table-col">1</div><div class="div-table-col">2</div>
+            <div class="div-table-col">0</div>
+            <div class="div-table-col">1</div>
+            <div class="div-table-col">2</div>
         </div>
         <div class="div-table-row">
-            <div class="div-table-col">7</div><div class="div-table-col">X</div><div class="div-table-col">3</div>
+            <div class="div-table-col">7</div>
+            <div class="div-table-col">X</div>
+            <div class="div-table-col">3</div>
         </div>
         <div class="div-table-row">
-            <div class="div-table-col">6</div><div class="div-table-col">5</div><div class="div-table-col">4</div>
+            <div class="div-table-col">6</div>
+            <div class="div-table-col">5</div>
+            <div class="div-table-col">4</div>
         </div>
     </div>
     <pre id="stats"></pre>
     <a href="#" id="downloader" onclick="downloadCanvas()" download="image.png">Save to PNG</a>
+    <hr />
+    <span>Upload image here: </span><input type="file" id="uploader"/>
     <script>
 
-// regions = add each new point to parent region; unite regions of same type
-// speed = possibility for active points to spawn children points
-// attraction = how much other points in vicinity influence the child point location
-// preferred direction = increases chance of exapnding straight or diagonally
-// pushiness = possibility to overwrite other points (in the same iteration?)
-// weights of all those points above
-// starting position tuning
+        // regions = add each new point to parent region; unite regions of same type
+        // speed = possibility for active points to spawn children points
+        // attraction = how much other points in vicinity influence the child point location
+        // preferred direction = increases chance of exapnding straight or diagonally
+        // pushiness = possibility to overwrite other points (in the same iteration?)
+        // weights of all those points above
+        // starting position tuning
 
         var iLimit = 0;
         var totalLimit = 500;
@@ -57,9 +108,13 @@
         var pic = document.getElementById("pic").getContext('2d');
         var h = pic.canvas.height;
         var w = pic.canvas.width;
+        // these are effective height/width based on the source image (if no, source - defaults to canvas size). Points should not be generated outside these borders
+        var eH = h;
+        var eW = w;
         var it = 0;
+        var startTime;
         var activePoints = {}; // TODO: make an array instead of obj?
-        var around = [{x: -1, y: -1}, {x: 0, y: -1}, {x: 1, y: -1}, {x: 1, y: 0}, {x: 1, y: 1}, {x: 0, y: 1}, {x: -1, y: 1}, {x: -1, y: 0}];
+        var around = [{ x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: -1, y: 1 }, { x: -1, y: 0 }];
         var picMap = {};
         var pTypes = {
             green: {
@@ -104,6 +159,10 @@
                 color: "grey",
                 speed: 0.4,
                 mSet: "diagonal"
+            },
+            white: {
+                color: "white",
+                speed: 1,
             }
         };
         var movementSets = {
@@ -155,7 +214,7 @@
         }
 
         // draw({x: 0, y:1, t: "type1"})
-        function draw({x, y, pType, reg, pi}) {
+        function draw({ x, y, pType, reg, pi }) {
             var t = pTypes[pType];
             if (!t) throw new Error("no type defined");
             var newPoint;
@@ -178,20 +237,20 @@
         }
 
         // create a new point by randomly filling a nearby empty spot
-        function simpleNewPoint({x, y, pType, reg}) {
+        function simpleNewPoint({ x, y, pType, reg }) {
             var possibleXY = [];
             for (var a of around) {
                 var ax = x + a.x;
                 var ay = y + a.y;
-                if (ax >= 0 && ay >= 0 && ax < w && ay < h && !picMap[ax + "," + ay]) {
-                    possibleXY.push({x: ax, y: ay});
+                if (ax >= 0 && ay >= 0 && ax < eW && ay < eH && !picMap[ax + "," + ay]) {
+                    possibleXY.push({ x: ax, y: ay });
                 }
             }
             if (!possibleXY.length) {
                 return;
             }
-            var where = Math.floor((Math.random()*possibleXY.length));
-            return {x: possibleXY[where].x, y: possibleXY[where].y, pType, reg}
+            var where = Math.floor((Math.random() * possibleXY.length));
+            return { x: possibleXY[where].x, y: possibleXY[where].y, pType, reg }
         }
 
         function weightedNewPoint(point) {
@@ -206,7 +265,7 @@
             return calcDirection(arguments[0], t.mSet);
         }
 
-        function calcDirection({x, y, pType, reg, pi}, mSetName) {
+        function calcDirection({ x, y, pType, reg, pi }, mSetName) {
             // return Math.acos(2*x-1)/Math.PI;
             var mSet = movementSets[mSetName];
             if (!mSet) throw new Error("unknown movement set " + mSetName);
@@ -215,8 +274,8 @@
                 var a = around[i];
                 var ax = x + a.x;
                 var ay = y + a.y;
-                if (ax >= 0 && ay >= 0 && ax < w && ay < h && !picMap[ax + "," + ay]) {
-                    possibleXY.push({x: ax, y: ay, i});
+                if (ax >= 0 && ay >= 0 && ax < eW && ay < eH && !picMap[ax + "," + ay]) {
+                    possibleXY.push({ x: ax, y: ay, i });
                 }
             }
             if (!possibleXY.length) {
@@ -233,7 +292,7 @@
                     }
                 }
 
-                randoms.push(Math.random()*weight);
+                randoms.push(Math.random() * weight);
             }
             var winner = randoms.reduce(
                 (previousValue, currentValue, currentIndex, array) => currentValue > randoms[previousValue] ? currentIndex : previousValue,
@@ -253,11 +312,11 @@
         }
 
         function makeRandomPoints(amount) {
-            if (h*w <= amount) throw new Error("too many start points");
+            if (h * w <= amount) throw new Error("too many start points");
             var points = [];
             while (points.length < (amount - 1)) {
-                var rx = Math.floor((Math.random()*w));
-                var ry = Math.floor((Math.random()*h));
+                var rx = Math.floor((Math.random() * w));
+                var ry = Math.floor((Math.random() * h));
                 var found;
                 for (var i = 0; i < points.length; i++) {
                     if (points[i].x === rx && points[i].y === ry) {
@@ -266,8 +325,8 @@
                     }
                 }
                 if (!found) {
-                    var ti = Math.floor((Math.random()*Object.keys(pTypes).length));
-                    points.push({x: rx, y: ry, reg: "r" + points.length, pType: Object.keys(pTypes)[ti]});
+                    var ti = Math.floor((Math.random() * Object.keys(pTypes).length));
+                    points.push({ x: rx, y: ry, reg: "r" + points.length, pType: Object.keys(pTypes)[ti] });
                 }
             }
             return points;
@@ -292,6 +351,36 @@
             requestAnimationFrame(update);
         }
 
+        function makeSamplePoints(rate) {
+            var sourcePic = document.getElementById('source_pic').getContext('2d');
+            var points = [];
+            for (var i = 0; i < sourceH; i+=rate) {
+                for (var j = 0; j < sourceW; j+=rate) {
+                    var pix = sourcePic.getImageData(j, i, 1, 1).data;
+                    var pointName = `r${pix[0]}g${pix[1]}b${pix[2]}`;
+                    pTypes[pointName] = {
+                        color: `rgb(${pix[0]},${pix[1]},${pix[2]})`,
+                        speed: 1
+                    };
+                    points.push({ x: j, y: i, reg: "r" + points.length, pType: pointName });
+                }
+            }
+            return points;
+        }
+
+        function start() {
+            if (it > 0) {
+                if (!confirm("The existing image will be lost on restart. Continue?")) {
+                    return;
+                }
+                pic.clearRect(0, 0, w, h);
+                it = 0;
+                picMap = {};
+                activePoints = {};
+            }
+            eH = h;
+            eW = w;
+            startTime = new Date();
         // var startPoints = [
         //     {x: 50, y: 50, pType: "green", reg: "g"},
         //     {x: 450, y: 50, pType: "blue", reg: "b"},
@@ -299,10 +388,31 @@
         //     {x: 450, y: 450, pType: "yellow", reg: "y"}
         // ];
         // fillStartPoints(startPoints);
-        fillStartPoints(makeRandomPoints(110));
-        var startTime = new Date();
-        update();
+            fillStartPoints(makeRandomPoints(110));
+            update();
+        }
+
+        function startFromSource() {
+            if (!sourceBlob) {
+                return alert("Provide image first!");
+            }
+            if (it > 0) {
+                if (!confirm("The existing image will be lost on restart. Continue?")) {
+                    return;
+                }
+                pic.clearRect(0, 0, w, h);
+                it = 0;
+                picMap = {};
+                activePoints = {};
+            }
+            eH = sourceH;
+            eW = sourceW;
+            startTime = new Date();
+            fillStartPoints(makeSamplePoints(20));
+            update();
+        }
 
     </script>
 </body>
+
 </html>
