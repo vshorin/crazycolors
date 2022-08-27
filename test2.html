@@ -33,6 +33,7 @@
             <div class="div-table-col">6</div><div class="div-table-col">5</div><div class="div-table-col">4</div>
         </div>
     </div>
+    <pre id="stats"></pre>
     <script>
 
 // regions = add each new point to parent region; unite regions of same type
@@ -122,7 +123,7 @@
             },
             diagonal: {
                 weights: [1, 0.25, 1, 0.25, 1, 0.25, 1, 0.25],
-                threshold: 0.2,
+                threshold: 0.4,
                 inetrness: 0.25,
                 inetrnessPenalty: -0.5
             },
@@ -233,7 +234,7 @@
             if (randoms[winner] <= mSet.threshold) {
                 return {};
             }
-            console.log(`mSet ${mSetName}, winner ${possibleXY[winner].i} at ${randoms[winner]}`);
+            // console.log(`mSet ${mSetName}, winner ${possibleXY[winner].i} at ${randoms[winner]}`);
             return {
                 x: possibleXY[winner].x,
                 y: possibleXY[winner].y,
@@ -267,8 +268,10 @@
         function update() {
             if (!Object.keys(activePoints).length || (iLimit && it >= iLimit)) {
                 console.log("finished!");
+                document.getElementById("stats").innerHTML = `Finished at iteration ${it}. Process took ${Date.now() - startTime.getTime()}ms`;
                 return;
             }
+            document.getElementById("stats").innerHTML = "Running iteration " + it;
             console.log("iteration " + it++);
             for (var ap of Object.keys(activePoints)) {
                 draw(activePoints[ap]);
@@ -284,7 +287,7 @@
         ];
         fillStartPoints(startPoints);
         // fillStartPoints(makeRandomPoints(8));
-
+        var startTime = new Date();
         update();
 
     </script>
